@@ -12,8 +12,6 @@ Smart Commit Tool is a robust Git wrapper designed for developers who value code
 
 ## 📦 Installation
 
-Since the project uses `hatchling`, you can install it locally in editable mode (perfect for development):
-
 ```bash
 pip install smart-commit
 ```
