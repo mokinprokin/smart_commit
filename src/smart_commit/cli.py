@@ -17,6 +17,15 @@ def run_shell(command, silent=False):
     return result
 
 
+def ensure_gitignore():
+    """Создает стандартный .gitignore для Python, если он отсутствует."""
+    if not Path(".gitignore").exists():
+        print("📝 .gitignore не найден. Создаю стандартный для Python...")
+        content = "__pycache__/\n*.py[cod]\n*$py.class\n.venv/\nvenv/\n.env\n.vscode/\ndist/\nbuild/\n*.egg-info/\n"
+        with open(".gitignore", "w", encoding="utf-8") as f:
+            f.write(content)
+
+
 def get_config():
     path = Path("pyproject.toml")
     if not path.exists():
@@ -64,6 +73,7 @@ def main():
 
     # Автоматическая настройка Git
     ensure_git_setup(repo_url)
+    ensure_gitignore()
 
     print("\n--- 🚀 SMART COMMIT PRE-CHECK ---")
     branch = input("🌿 Название ветки (например, main): ").strip()

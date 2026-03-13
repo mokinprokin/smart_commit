@@ -17,7 +17,7 @@ dependencies = [
 smart-commit = "smart_commit.cli:main"
 
 [tool.smart_commit]
-repository_url = "git@github.com:mokinprokin/smart_commit.git"
+repository_url = "https://github.com/mokinprokin/smart_commit.git"
 commands = ["ruff check ."]
 
 [tool.hatch.build.targets.wheel]
