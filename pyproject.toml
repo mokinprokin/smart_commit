@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "smart-commit-tool"
 version = "0.1.0"
-description = "Автоматизация проверок (Ruff/Pytest) перед коммитом и пушем"
+description = "Automated pre-push workflow manager with built-in code quality enforcement and smart branch protection."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -19,6 +19,7 @@ smart-commit = "smart_commit.cli:main"
 [tool.smart_commit]
 repository_url = "https://github.com/mokinprokin/smart_commit.git"
 commands = ["ruff check ."]
+protected_branches = ["main", "master", "prod", "release"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/smart_commit"]
