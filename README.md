@@ -1,4 +1,5 @@
 # 🚀 Smart Commit Tool
+[English](README.md) | [Русский](README.ru.md)
 
 Smart Commit Tool is a robust Git wrapper designed for developers who value code quality. It automates the "Pre-check → Commit → Sync → Push" workflow, ensuring that no broken code ever reaches your remote repository.
 
