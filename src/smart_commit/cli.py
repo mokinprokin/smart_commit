@@ -2,7 +2,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Поддержка TOML
 if sys.version_info >= (3, 11):
     import tomllib
 else:
