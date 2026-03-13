@@ -39,21 +39,17 @@ def get_config():
 
 def ensure_git_setup(expected_url):
     """Проверяет наличие Git и настраивает remote, если нужно."""
-    # 1. Проверяем, инициализирован ли Git
     if not Path(".git").exists():
         print("📁 Git не найден. Инициализирую репозиторий...")
         run_shell("git init")
 
-    # 2. Проверяем remote origin
     res = run_shell("git remote get-url origin", silent=True)
     current_url = res.stdout.strip()
 
     if res.returncode != 0:
-        # Если origin вообще нет
         print(f"🔗 Добавляю remote origin: {expected_url}")
         run_shell(f"git remote add origin {expected_url}")
     elif expected_url not in current_url:
-        # Если origin есть, но он другой
         print(f"🔄 Обновляю URL репозитория на: {expected_url}")
         run_shell(f"git remote set-url origin {expected_url}")
     else:
@@ -71,7 +67,6 @@ def main():
         )
         sys.exit(1)
 
-    # Автоматическая настройка Git
     ensure_git_setup(repo_url)
     ensure_gitignore()
 
@@ -83,18 +78,14 @@ def main():
         print("❌ Ошибка: Ветка и сообщение не могут быть пустыми.")
         sys.exit(1)
 
-    # Переключение/Создание ветки
-    # Используем -B, чтобы принудительно создать или переключиться
     run_shell(f"git checkout -B {branch}", silent=True)
 
-    # Запуск проверок из конфига
     print("\n--- 🛠 ЗАПУСК ПРОВЕРОК ---")
     for cmd in commands:
         if run_shell(cmd).returncode != 0:
             print(f"\n🛑 Проверка '{cmd}' провалена. Исправь ошибки!")
             sys.exit(1)
 
-    # Финальный цикл Git
     print("\n--- ✅ ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ. ПУШИМ... ---")
 
     success = (
