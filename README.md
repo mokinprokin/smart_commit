@@ -3,10 +3,9 @@
 [English](README.md) | [Русский](README.ru.md)
 
 [![PyPI version](https://img.shields.io/pypi/v/smart-commit-tool?color=blue&logo=pypi&logoColor=white)](https://pypi.org/project/smart-commit-tool/)
-[![Python versions](https://img.shields.io/pypi/pyversions/smart-commit-tool?logo=python&logoColor=white)](https://pypi.org/project/smart-commit-tool/)
+[![Python versions](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue?logo=python&logoColor=white)](https://pypi.org/project/smart-commit-tool/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/mokinprokin/smart_commit?style=social)](https://github.com/mokinprokin/smart_commit/stargazers)
-[![PyPI](https://img.shields.io/pypi/v/smart-commit-tool?label=pypi%20package&color=blue)](https://pypi.org/project/smart-commit-tool/)
 [![Downloads](https://img.shields.io/pypi/dm/smart-commit-tool?color=green)](https://pypi.org/project/smart-commit-tool/)
 
 **Smart Commit** is a universal CLI tool designed to streamline and secure your Git workflow. It orchestrates linting, testing, committing, and pushing into a single, bulletproof operation.
