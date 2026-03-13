@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import argparse
 from pathlib import Path
 
 if sys.version_info >= (3, 11):
@@ -17,9 +18,9 @@ def run_shell(command, silent=False):
 
 
 def ensure_gitignore():
-    """Создает стандартный .gitignore для Python, если он отсутствует."""
+    """Создает стандартный .gitignore для Python."""
     if not Path(".gitignore").exists():
-        print("📝 .gitignore не найден. Создаю стандартный для Python...")
+        print("📝 .gitignore не найден. Создаю стандартный...")
         content = "__pycache__/\n*.py[cod]\n*$py.class\n.venv/\nvenv/\n.env\n.vscode/\ndist/\nbuild/\n*.egg-info/\n"
         with open(".gitignore", "w", encoding="utf-8") as f:
             f.write(content)
@@ -37,7 +38,7 @@ def get_config():
 
 
 def ensure_git_setup(expected_url):
-    """Проверяет наличие Git и настраивает remote, если нужно."""
+    """Настраивает Git и remote."""
     if not Path(".git").exists():
         print("📁 Git не найден. Инициализирую репозиторий...")
         run_shell("git init")
@@ -52,10 +53,33 @@ def ensure_git_setup(expected_url):
         print(f"🔄 Обновляю URL репозитория на: {expected_url}")
         run_shell(f"git remote set-url origin {expected_url}")
     else:
-        print("✅ Git репозиторий и remote настроены корректно.")
+        print("✅ Git репозиторий настроен.")
+
+
+def switch_branch(branch):
+    """Безопасно переключает ветку, учитывая пустые (unborn) репозитории."""
+    # Проверяем, есть ли уже коммиты в репозитории
+    has_commits = run_shell("git rev-parse HEAD", silent=True).returncode == 0
+
+    if not has_commits:
+        # Если репозиторий пустой, просто переименовываем начальную ветку
+        run_shell(f"git branch -M {branch}", silent=True)
+    else:
+        # Если коммиты есть, безопасно переключаемся или создаем ветку
+        run_shell(f"git checkout -B {branch}", silent=True)
 
 
 def main():
+    # Настраиваем аргументы командной строки
+    parser = argparse.ArgumentParser(description="Smart Commit & Push Tool")
+    parser.add_argument(
+        "-b", "--branch", help="Указать ветку (пропустит вопрос о ветке)"
+    )
+    parser.add_argument(
+        "-m", "--message", help="Текст коммита (пропустит вопрос о коммите)"
+    )
+    args = parser.parse_args()
+
     config = get_config()
     repo_url = config.get("repository_url")
     commands = config.get("commands", [])
@@ -70,14 +94,34 @@ def main():
     ensure_gitignore()
 
     print("\n--- 🚀 SMART COMMIT PRE-CHECK ---")
-    branch = input("🌿 Название ветки (например, main): ").strip()
-    message = input("📝 Сообщение коммита: ").strip()
+
+    # Логика определения ветки
+    branch = args.branch
+    if not branch:
+        # Узнаем текущую ветку у Git
+        current_branch = run_shell(
+            "git branch --show-current", silent=True
+        ).stdout.strip()
+
+        if current_branch:
+            # Если мы уже в ветке, предлагаем её по умолчанию
+            user_input = input(f"🌿 Ветка [{current_branch}]: ").strip()
+            branch = user_input if user_input else current_branch
+        else:
+            # Если репозиторий совсем пустой и ветки еще нет
+            branch = input("🌿 Название ветки (например, main): ").strip()
+
+    # Логика определения сообщения
+    message = args.message
+    if not message:
+        message = input("📝 Сообщение коммита: ").strip()
 
     if not branch or not message:
         print("❌ Ошибка: Ветка и сообщение не могут быть пустыми.")
         sys.exit(1)
 
-    run_shell(f"git checkout -B {branch}", silent=True)
+    # Безопасное переключение ветки
+    switch_branch(branch)
 
     print("\n--- 🛠 ЗАПУСК ПРОВЕРОК ---")
     for cmd in commands:
