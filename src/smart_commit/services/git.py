@@ -29,6 +29,23 @@ class GitService:
         return cls._run(["git", "branch", "--show-current"]).stdout.strip()
 
     @classmethod
+    def switch_branch(cls, branch: str):
+        """Safely switches to the target branch or creates it."""
+        current = cls.get_current_branch()
+        if current != branch:
+            Console.info(f"🌿 Switching branch: {current} ➔ {branch}")
+            has_commits = cls._run(["git", "rev-parse", "HEAD"]).returncode == 0
+
+            if not has_commits:
+                res = cls._run(["git", "branch", "-M", branch])
+            else:
+                res = cls._run(["git", "checkout", "-B", branch])
+
+            if res.returncode != 0:
+                error_msg = res.stderr.strip() or res.stdout.strip()
+                raise GitOperationError(f"Failed to switch branch: {error_msg}")
+
+    @classmethod
     def has_staged_changes(cls) -> bool:
         """Checks if there are files already in the staging area."""
         res = cls._run(["git", "diff", "--cached", "--quiet"])
@@ -53,12 +70,15 @@ class GitService:
 
     @classmethod
     def commit(cls, message: str):
+        """Commits changes and extracts Git output if it fails."""
         res = cls._run(["git", "commit", "-m", message])
         if res.returncode != 0:
-            raise GitOperationError("Commit failed. Ensure you have changes to commit.")
+            error_msg = res.stderr.strip() or res.stdout.strip()
+            raise GitOperationError(f"Commit failed. Git says:\n{error_msg}")
 
     @classmethod
     def push_with_retry(cls, branch: str):
+        """Pushes to remote, attempting a pull --rebase if rejected."""
         Console.info(f"Pushing to branch: {branch}...")
         res = cls._run(["git", "push", "-u", "origin", branch])
 
@@ -71,11 +91,14 @@ class GitService:
         pull_res = cls._run(["git", "pull", "origin", branch, "--rebase"])
 
         if pull_res.returncode != 0:
+            error_msg = pull_res.stderr.strip() or pull_res.stdout.strip()
             raise GitOperationError(
-                "🛑 Rebase conflict detected! Please resolve manually and run again."
+                f"🛑 Rebase conflict detected!\nGit says: {error_msg}"
             )
 
         Console.success("Sync successful. Retrying push...")
         push_retry = cls._run(["git", "push", "-u", "origin", branch])
+
         if push_retry.returncode != 0:
-            raise GitOperationError("Final push failed after rebase.")
+            error_msg = push_retry.stderr.strip() or push_retry.stdout.strip()
+            raise GitOperationError(f"Final push failed after rebase:\n{error_msg}")

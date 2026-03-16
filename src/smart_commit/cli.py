@@ -27,7 +27,7 @@ def main():
 
         current_branch = GitService.get_current_branch()
         branch = args.branch or current_branch
-
+        GitService.switch_branch(branch)
         if branch in protected_branches:
             Console.warning(
                 f"You are pushing directly to a protected branch: '{branch}'."
