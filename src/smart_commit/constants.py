@@ -78,7 +78,7 @@ jobs:
             if [ -f "poetry.lock" ] || [ -f "pyproject.toml" ] && grep -q "tool.poetry" "pyproject.toml"; then
                 echo "🚀 Poetry detected!"
                 pip install poetry
-                # Force poetry to install globally so __COMMANDS__ work without 'poetry run'
+                # Force poetry to install globally so custom commands work without 'poetry run'
                 poetry config virtualenvs.create false
                 poetry install --no-interaction --no-ansi
                 
