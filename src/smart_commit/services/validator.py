@@ -2,14 +2,14 @@ import subprocess
 import re
 from ..exceptions import ValidationError
 from ..logger import Console, logger
+from ..constants import CONVENTIONAL_COMMIT_PATTERN
 
 
 class ValidatorService:
     @classmethod
     def check_conventional_commit(cls, message: str):
         """Validates message against Conventional Commits standard."""
-        pattern = r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?:\s.+"
-        if not re.match(pattern, message):
+        if not re.match(CONVENTIONAL_COMMIT_PATTERN, message):
             logger.warning(f"Non-conventional commit message: {message}")
             Console.warning(
                 "Commit message does not follow Conventional Commits (e.g., 'feat: add auth')."
