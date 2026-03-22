@@ -7,21 +7,32 @@ from ..logger import Console, logger
 class GitService:
     @classmethod
     def _run(cls, cmd: list[str], silent: bool = True) -> subprocess.CompletedProcess:
-        """Internal helper for executing Git commands."""
+        """Internal helper for executing Git commands with combined output."""
         logger.debug(f"Git CMD: {' '.join(cmd)}")
-        return subprocess.run(cmd, capture_output=silent, text=True)
+        return subprocess.run(cmd, capture_output=True, text=True)
 
     @classmethod
     def ensure_repo(cls):
-        """Checks for repository initialization and Detached HEAD state."""
-        if not Path(".git").exists():
+        """Checks for repository initialization, Detached HEAD, and ongoing merges/rebases."""
+        git_dir = Path(".git")
+        if not git_dir.exists():
             Console.warning("Git not initialized. Initializing now...")
             cls._run(["git", "init"])
+        is_rebase = (git_dir / "rebase-apply").exists() or (
+            git_dir / "rebase-merge"
+        ).exists()
+        is_merge = (git_dir / "MERGE_HEAD").exists()
+
+        if is_rebase or is_merge:
+            raise GitOperationError(
+                "🛑 Git is currently in the middle of a REBASE or MERGE.\n"
+                "Please resolve conflicts manually or run 'git rebase --abort', then try again."
+            )
 
         res = cls._run(["git", "branch", "--show-current"])
         if not res.stdout.strip():
             raise GitOperationError(
-                "You are in a DETACHED HEAD state. Process stopped for safety."
+                "You are in a DETACHED HEAD state. Please switch to a branch (e.g., 'git checkout main')."
             )
 
     @classmethod
@@ -76,33 +87,41 @@ class GitService:
 
     @classmethod
     def commit(cls, message: str):
-        """Commits changes and extracts Git output if it fails."""
+        """Commits changes. Ignores 'nothing to commit' errors to allow push-only flows."""
         res = cls._run(["git", "commit", "-m", message])
+
         if res.returncode != 0:
-            error_msg = res.stderr.strip() or res.stdout.strip()
-            raise GitOperationError(f"Commit failed. Git says:\n{error_msg}")
+            output = (res.stdout + res.stderr).lower()
+            if "nothing to commit" in output or "working tree clean" in output:
+                return
+
+            raise GitOperationError(
+                f"Commit failed. Git says:\n{res.stderr or res.stdout}"
+            )
 
     @classmethod
     def push_with_retry(cls, branch: str):
-        """Pushes to remote, attempting a pull --rebase if rejected."""
+        """Pushes to remote, attempting a pull --rebase if rejected or diverged."""
         Console.info(f"Pushing to branch: {branch}...")
         res = cls._run(["git", "push", "-u", "origin", branch])
 
         if res.returncode == 0:
             Console.success(f"Code successfully pushed to origin/{branch}!")
             return
+        Console.warning("Push rejected or branches diverged. Remote changes detected.")
+        Console.info("Synchronizing via pull --rebase...")
 
-        Console.warning("Push rejected. Remote changes detected.")
-        Console.info("Synchronizing (pull --rebase)...")
         pull_res = cls._run(["git", "pull", "origin", branch, "--rebase"])
 
         if pull_res.returncode != 0:
             error_msg = pull_res.stderr.strip() or pull_res.stdout.strip()
+            cls._run(["git", "rebase", "--abort"])
             raise GitOperationError(
-                f"🛑 Rebase conflict detected!\nGit says: {error_msg}"
+                f"🛑 Rebase conflict! Conflicts were detected with remote files.\n"
+                f"Sync aborted. Please resolve manually. Git says:\n{error_msg}"
             )
 
-        Console.success("Sync successful. Retrying push...")
+        Console.success("Sync successful. Retrying final push...")
         push_retry = cls._run(["git", "push", "-u", "origin", branch])
 
         if push_retry.returncode != 0:
