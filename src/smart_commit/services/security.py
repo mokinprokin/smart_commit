@@ -1,68 +1,59 @@
-import subprocess
-from pathlib import Path
-from ..logger import Console, logger
-from ..constants import GITIGNORE_FILE, BASE_GITIGNORE, EXCLUDED_SCAN_DIRS
+import os
+import re
+import sys
+from .logger import logger
+
+SECRET_PATTERNS = [
+    re.compile(
+        r'(?i)(api[_-]?key|secret|password|token)\s*[:=]\s*["\'][a-zA-Z0-9\-_]{10,}["\']'
+    ),
+    re.compile(r"-----BEGIN (RSA|OPENSSH|PRIVATE) KEY-----"),
+]
+
+SUSPICIOUS_FILES = [".env", ".env.local", "secrets.json"]
 
 
-class SecurityService:
-    @classmethod
-    def ensure_gitignore(cls):
-        """Ensures .gitignore exists or creates a secure default."""
-        if not GITIGNORE_FILE.exists():
-            Console.warning(
-                f"{GITIGNORE_FILE.name} not found. Creating a secure default configuration..."
-            )
-            with open(GITIGNORE_FILE, "w", encoding="utf-8") as f:
-                f.write(BASE_GITIGNORE.lstrip())
-            logger.info("Created default .gitignore")
+def check_secrets(staged_files: list[str]) -> bool:
+    """
+    Проверяет файлы на наличие секретов.
+    Возвращает True, если был изменен .gitignore (требуется повторный git add).
+    """
+    secrets_found = []
 
-    @classmethod
-    def check_env_leaks(cls):
-        """
-        Scans for .env files (e.g. .env.local, .test.env, prod.env)
-        and uses Git to check if they are ignored.
-        Prevents accidental leaks of secrets.
-        """
-        Console.info("🛡️ Scanning for potential secret leaks (.env files)...")
+    for file_path in staged_files:
+        if not os.path.exists(file_path):
+            continue
 
-        raw_files = set(Path(".").rglob(".env*")) | set(Path(".").rglob("*.env"))
+        file_name = os.path.basename(file_path)
 
-        env_files = [
-            f
-            for f in raw_files
-            if f.is_file() and not any(part in EXCLUDED_SCAN_DIRS for part in f.parts)
-        ]
+        if file_name in SUSPICIOUS_FILES:
+            secrets_found.append(file_path)
+            continue
 
-        leaked_files = []
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                if any(pattern.search(content) for pattern in SECRET_PATTERNS):
+                    secrets_found.append(file_path)
+        except UnicodeDecodeError:
+            pass
 
-        for env_file in env_files:
-            res = subprocess.run(
-                ["git", "check-ignore", "-q", str(env_file)], capture_output=True
-            )
-            if res.returncode == 1:
-                leaked_files.append(str(env_file))
+    if not secrets_found:
+        return False
 
-        if leaked_files:
-            Console.error(
-                f"CRITICAL SECURITY RISK: .env files found that are NOT in {GITIGNORE_FILE.name}!"
-            )
-            for lf in leaked_files:
-                print(f"  👉 {lf}")
+    logger.warning("ОБНАРУЖЕНЫ ВОЗМОЖНЫЕ УТЕЧКИ СЕКРЕТОВ!")
+    for s in secrets_found:
+        logger.warning(f" -> {s}")
 
-            ans = (
-                input(
-                    f"🛑 Add these files to {GITIGNORE_FILE.name} automatically? [Y/n]: "
-                )
-                .strip()
-                .lower()
-            )
-            if ans != "n":
-                with open(GITIGNORE_FILE, "a", encoding="utf-8") as f:
-                    f.write("\n# Auto-added by Smart Commit to prevent leaks\n")
-                    for lf in leaked_files:
-                        f.write(f"{lf}\n")
-                Console.success(f"Files successfully added to {GITIGNORE_FILE.name}.")
-            else:
-                Console.warning(
-                    "Action declined. Please be careful: secrets might be pushed!"
-                )
+    answer = input("Добавить эти файлы в .gitignore? [y/N]: ").strip().lower()
+    if answer == "y":
+        with open(".gitignore", "a", encoding="utf-8") as f:
+            f.write("\n# Auto-added by Smart Commit\n")
+            for s in secrets_found:
+                f.write(f"{s}\n")
+
+        logger.success("Файлы добавлены в .gitignore.")
+        return True
+
+    logger.error("Коммит прерван из-за угрозы безопасности. Очистите секреты вручную.")
+    sys.exit(1)

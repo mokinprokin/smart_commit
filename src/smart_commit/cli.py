@@ -1,104 +1,69 @@
 import argparse
 import sys
-from .exceptions import SmartCommitError
-from .config import ConfigService
-from .services.security import SecurityService
-from .services.git import GitService
-from .services.validator import ValidatorService
-from .services.ci import CIService
-from .logger import Console, logger
-from .constants import TOOL_NAME, DEFAULT_PROTECTED_BRANCHES
+from .services import (
+    config as config_service,
+    git as git_service,
+    security as security_service,
+    runner as runner_service,
+)
+from .services.logger import logger
 
 
-def run_ci_generation_flow():
-    """Dedicated flow for 'smart-commit generate-action' command."""
-    logger.info("=== CI Generation Flow Started ===")
-    config = ConfigService.load_or_create()
-    commands = config.get("commands", [])
-    protected_branches = config.get("protected_branches", DEFAULT_PROTECTED_BRANCHES)
-
-    GitService.ensure_repo()
-
-    CIService.generate_github_action(commands, protected_branches)
-    CIService.prompt_and_push()
-
-    sys.exit(0)
+def interactive_input(prompt: str, default: str = "") -> str:
+    """Запрашивает ввод у пользователя, если флаг не передан."""
+    suffix = f" [{default}]" if default else ""
+    value = input(f"{prompt}{suffix}: ").strip()
+    return value if value else default
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "generate-action":
-        try:
-            run_ci_generation_flow()
-        except SmartCommitError as e:
-            Console.error(str(e))
-            sys.exit(1)
-        except KeyboardInterrupt:
-            Console.warning("\nProcess interrupted by user.")
-            sys.exit(0)
+    parser = argparse.ArgumentParser(description="Smart Git Commit Tool")
+    parser.add_argument("-b", "--branch", help="Имя ветки")
+    parser.add_argument("-m", "--message", help="Сообщение коммита")
+    parser.add_argument("-r", "--remote", help="Remote (например, origin)")
 
-    parser = argparse.ArgumentParser(description=TOOL_NAME)
-    parser.add_argument("-b", "--branch", help="Specify target branch")
-    parser.add_argument("-m", "--message", help="Commit message")
     args = parser.parse_args()
 
-    try:
-        logger.info("=== Smart Commit Process Started ===")
+    logger.info("Инициализация Smart Commit...")
 
-        config = ConfigService.load_or_create()
-        protected_branches = config.get(
-            "protected_branches", DEFAULT_PROTECTED_BRANCHES
-        )
-        commands = config.get("commands", [])
+    # 1. Сбор параметров (Fallback на интерактивный ввод)
+    branch = args.branch or interactive_input("Введите имя ветки")
+    message = args.message or interactive_input("Введите сообщение коммита")
+    remote = args.remote or interactive_input("Введите remote", default="origin")
 
-        GitService.ensure_repo()
-        SecurityService.ensure_gitignore()
-        SecurityService.check_env_leaks()
-
-        current_branch = GitService.get_current_branch()
-        branch = args.branch or current_branch
-        GitService.switch_branch(branch)
-
-        if branch in protected_branches:
-            Console.warning(
-                f"You are pushing directly to a protected branch: '{branch}'."
-            )
-            ans = input("Are you sure you want to continue? [y/N]: ").strip().lower()
-            if ans != "y":
-                raise SmartCommitError("Operation cancelled by user.")
-
-        has_changes = GitService.has_any_changes()
-        message = args.message
-
-        if has_changes:
-            if not message:
-                message = input("📝 Enter commit message: ").strip()
-            if not message:
-                raise SmartCommitError("Commit message cannot be empty.")
-
-            ValidatorService.check_conventional_commit(message)
-
-        if commands:
-            Console.info("--- 🛠 RUNNING PIPELINE (from pyproject.toml) ---")
-            ValidatorService.run_commands(commands)
-
-        Console.info("--- 🚀 FINALIZING WORKFLOW ---")
-
-        if has_changes:
-            GitService.smart_stage()
-            GitService.commit(message)
-        else:
-            Console.info(
-                "Working directory is clean. Skipping commit phase and proceeding to push."
-            )
-
-        GitService.push_with_retry(branch)
-
-    except SmartCommitError as e:
-        Console.error(str(e))
+    if not branch or not message:
+        logger.error("Ветка и сообщение коммита обязательны!")
         sys.exit(1)
-    except KeyboardInterrupt:
-        Console.warning("\nProcess interrupted by user.")
+
+    # 2. Загрузка конфига
+    config = config_service.load_config()
+
+    # 3. Валидация ветки
+    git_service.check_protected(branch, config.get("protected_branches", []))
+    git_service.ensure_branch(branch)
+
+    # 4. Добавление файлов в индекс (чтобы сканер секретов увидел их)
+    git_service.add_all()
+
+    # 5. Секьюрити чек
+    staged_files = git_service.get_staged_files()
+    if not staged_files:
+        logger.warning("Нет изменений для коммита.")
         sys.exit(0)
+
+    if security_service.check_secrets(staged_files):
+        # Удаляем из индекса файлы, которые только что попали в gitignore
+        git_service.run_cmd(["git", "rm", "-r", "--cached", "."])
+        git_service.add_all()
+
+    # 6. Запуск кастомных команд (ruff, тесты и т.д.)
+    runner_service.run_pre_commands(config.get("commands", []))
+
+    # 7. Финализация (Commit & Push)
+    git_service.commit(message)
+    git_service.push(remote, branch)
+
+    logger.success("Smart Commit завершил работу!")
 
 
 if __name__ == "__main__":
