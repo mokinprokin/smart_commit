@@ -21,6 +21,6 @@ language = "en"
 repository_url = "https://github.com/mokinprokin/SmartCommit.git"
 commands = ["ruff check ."]
 protected_branches = [ "master", "prod", "release"]
-
+ignore_files = []
 [tool.hatch.build.targets.wheel]
 packages = ["src/smart_commit"]

@@ -56,8 +56,8 @@ def main():
         logger.warning(i18n.t("no_changes"))
         sys.exit(0)
 
-    # Сканирование на секреты
-    if security_service.check_secrets(staged_files):
+    ignore_list = config.get("ignore_files", [])
+    if security_service.check_secrets(staged_files, ignore_list):
         # Если секреты найдены и добавлены в .gitignore, пересобираем индекс
         git_service.run_cmd(["git", "rm", "-r", "--cached", "."])
         git_service.add_all()

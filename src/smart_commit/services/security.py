@@ -6,7 +6,7 @@ from .i18n import i18n
 
 SECRET_PATTERNS = [
     re.compile(
-        r'(?i)(api[_-]?key|secret|password|token)\s*[:=]\s*["\'][a-zA-Z0-9\-_]{10,}["\']'
+        r'(?i)(api[_-]?key|secret|token)\s*[:=]\s*["\'][a-zA-Z0-9\-_]{10,}["\']'
     ),
     re.compile(r"-----BEGIN (RSA|OPENSSH|PRIVATE) KEY-----"),
 ]
@@ -21,14 +21,18 @@ SUSPICIOUS_FILES = [
 ]
 
 
-def check_secrets(staged_files: list[str]) -> bool:
+def check_secrets(staged_files: list[str], config_ignored: list[str] = None) -> bool:
     """
     Проверяет файлы на наличие секретов.
     Возвращает True, если был изменен .gitignore (требуется повторный git add).
     """
+    ignored = config_ignored or []
     secrets_found = []
 
     for file_path in staged_files:
+        if file_path in ignored:
+            continue
+
         if not os.path.exists(file_path):
             continue
 

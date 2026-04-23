@@ -18,6 +18,7 @@ def load_config() -> dict:
         "repository_url": "",
         "commands": [],
         "protected_branches": ["main", "master", "prod", "release"],
+        "ignore_files": [],
     }
 
     if not config_path.exists():
